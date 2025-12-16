@@ -28,7 +28,16 @@ class Scheduler:
     def connect_db(self):
         """Connect to MongoDB"""
         try:
-            client = MongoClient(MONGODB_URI)
+            # Add SSL configuration for MongoDB Atlas
+            import ssl
+            client = MongoClient(
+                MONGODB_URI,
+                tls=True,
+                tlsAllowInvalidCertificates=False,
+                serverSelectionTimeoutMS=5000,
+                connectTimeoutMS=10000,
+                socketTimeoutMS=20000
+            )
             # Extract database name from URI or use default
             # MongoDB URI format: mongodb+srv://user:pass@host/dbname?options
             uri_parts = MONGODB_URI.rstrip('/').split('/')
@@ -43,6 +52,8 @@ class Scheduler:
             
             db = client[db_name]
             collection = db.searches
+            # Test connection
+            client.admin.command('ping')
             return collection
         except Exception as e:
             return None
