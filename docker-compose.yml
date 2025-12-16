@@ -1,0 +1,20 @@
+version: '3.8'
+
+services:
+  python-api:
+    build: .
+    container_name: airbnb-python-api
+    ports:
+      - "5000:5000"
+    environment:
+      - MONGODB_URI=${MONGODB_URI:-mongodb+srv://wasif833:00123333@cluster0.6b8txmd.mongodb.net/airbnb-price-spy}
+      - NEXTJS_API_URL=${NEXTJS_API_URL:-http://localhost:3000}
+      - PYTHON_API_URL=${PYTHON_API_URL:-http://127.0.0.1:5000}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:5000/api/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+
