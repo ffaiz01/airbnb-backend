@@ -10,6 +10,7 @@ from pymongo import MongoClient
 import requests
 import os
 from typing import List, Dict, Optional
+import pytz
 
 # Configuration
 MONGODB_URI = os.getenv('MONGODB_URI', 'mongodb+srv://wasif833:00123333@cluster0.6b8txmd.mongodb.net/')
@@ -17,6 +18,22 @@ NEXTJS_API_URL = os.getenv('NEXTJS_API_URL', 'http://localhost:3000')
 PYTHON_API_URL = os.getenv('PYTHON_API_URL', 'http://127.0.0.1:5000')
 MAX_WORKERS = 3  # Maximum concurrent threads
 CHECK_INTERVAL = 60  # Check for scheduled tasks every 60 seconds
+
+# Timezone configuration - use system local timezone or set explicitly
+# For PKT (Pakistan Time): 'Asia/Karachi'
+# For UTC: 'UTC'
+# For system local: None (uses system default)
+SCHEDULER_TIMEZONE = os.getenv('SCHEDULER_TIMEZONE', 'Asia/Karachi')  # Default to PKT
+if SCHEDULER_TIMEZONE:
+    try:
+        TZ = pytz.timezone(SCHEDULER_TIMEZONE)
+        print(f"🌍 [Scheduler] Using timezone: {SCHEDULER_TIMEZONE}")
+    except Exception as e:
+        print(f"⚠️ [Scheduler] Invalid timezone '{SCHEDULER_TIMEZONE}', using system default: {e}")
+        TZ = None
+else:
+    TZ = None  # Use system local timezone
+    print(f"🌍 [Scheduler] Using system local timezone")
 
 class Scheduler:
     def __init__(self):
@@ -86,7 +103,11 @@ class Scheduler:
             return False
         
         times = schedule.get('times', [])
-        current_time = datetime.now()
+        # Use local timezone (system default or configured TZ)
+        if TZ:
+            current_time = datetime.now(TZ)
+        else:
+            current_time = datetime.now()
         current_hour_minute = current_time.strftime('%H:%M')
         
         # Check if current time matches any enabled schedule time
@@ -160,8 +181,15 @@ class Scheduler:
     def check_and_run_schedules(self):
         """Check for scheduled tasks and run them"""
         try:
-            current_time = datetime.now().strftime('%H:%M:%S')
-            print(f"⏰ [Scheduler] Checking schedules at {current_time}")
+            # Use local timezone (system default or configured TZ)
+            if TZ:
+                current_time = datetime.now(TZ)
+            else:
+                current_time = datetime.now()
+            
+            current_time_str = current_time.strftime('%H:%M:%S')
+            timezone_info = current_time.strftime('%Z') if TZ else 'local'
+            print(f"⏰ [Scheduler] Checking schedules at {current_time_str} ({timezone_info})")
             
             searches = self.get_scheduled_searches()
             
@@ -177,7 +205,7 @@ class Scheduler:
                 return
             
             tasks_to_run = []
-            current_hour_minute = datetime.now().strftime('%H:%M')
+            current_hour_minute = current_time.strftime('%H:%M')
             
             for search in searches:
                 search_id = str(search.get('_id'))
