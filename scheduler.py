@@ -7,10 +7,12 @@ import threading
 from datetime import datetime, timedelta
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pymongo import MongoClient
+from bson import ObjectId
 import requests
 import os
 from typing import List, Dict, Optional
 import pytz
+from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
 
 # Configuration
 MONGODB_URI = os.getenv('MONGODB_URI', 'mongodb+srv://wasif833:00123333@cluster0.6b8txmd.mongodb.net/')
@@ -130,21 +132,200 @@ class Scheduler:
         
         return False
     
+    def build_airbnb_url(self, base_url: str, checkin: str, checkout: str) -> str:
+        """Build Airbnb URL with specific checkin/checkout dates"""
+        try:
+            parsed = urlparse(base_url)
+            query_params = parse_qs(parsed.query)
+            query_params['checkin'] = [checkin]
+            query_params['checkout'] = [checkout]
+            new_query = urlencode(query_params, doseq=True)
+            new_url = urlunparse((
+                parsed.scheme,
+                parsed.netloc,
+                parsed.path,
+                parsed.params,
+                new_query,
+                parsed.fragment
+            ))
+            return new_url
+        except Exception as e:
+            print(f"⚠️ [Scheduler] Error building URL: {e}")
+            return base_url
+    
+    def fetch_price_from_python_api(self, url: str) -> Optional[float]:
+        """Fetch lowest price from Python API"""
+        try:
+            response = requests.post(
+                f"{PYTHON_API_URL}/api/search/simple",
+                json={'url': url},
+                timeout=60
+            )
+            if response.status_code == 200:
+                data = response.json()
+                return data.get('lowest_price')
+            else:
+                print(f"⚠️ [Scheduler] API returned status {response.status_code}")
+                return None
+        except Exception as e:
+            print(f"⚠️ [Scheduler] Error fetching price: {e}")
+            return None
+    
     def run_search(self, search_id: str, search_name: str) -> bool:
-        """Run a single search by calling Next.js API"""
+        """Run a single search by fetching prices directly"""
+        collection = None
         try:
             print(f"🚀 [Scheduler] Starting search: {search_name} (ID: {search_id[:8]}...)")
-            url = f"{NEXTJS_API_URL}/api/searches/{search_id}/run"
-            response = requests.post(url, timeout=30)
             
-            if response.status_code == 200:
-                print(f"✅ [Scheduler] Successfully triggered search: {search_name}")
-                return True
-            else:
-                print(f"❌ [Scheduler] Failed to trigger search {search_name}: HTTP {response.status_code}")
+            # Connect to MongoDB
+            collection = self.connect_db()
+            if collection is None:
+                print(f"❌ [Scheduler] Failed to connect to MongoDB for {search_name}")
                 return False
+            
+            # Get search document
+            search = collection.find_one({'_id': ObjectId(search_id)})
+            if not search:
+                print(f"❌ [Scheduler] Search not found: {search_id}")
+                return False
+            
+            # Update status to running
+            current_time = datetime.now(TZ if TZ else None)
+            last_run_str = current_time.strftime('%H:%M')
+            collection.update_one(
+                {'_id': ObjectId(search_id)},
+                {
+                    '$set': {
+                        'status': 'running',
+                        'lastRun': last_run_str
+                    }
+                }
+            )
+            print(f"📊 [Scheduler] Updated status to 'running' for {search_name}")
+            
+            # Get pricing data
+            pricing_data = search.get('pricingData', {})
+            base_url = search.get('url', '')
+            
+            if not base_url:
+                print(f"❌ [Scheduler] No URL found for {search_name}")
+                collection.update_one(
+                    {'_id': ObjectId(search_id)},
+                    {'$set': {'status': 'error'}}
+                )
+                return False
+            
+            # Fetch prices for all date ranges
+            total_fetched = 0
+            
+            # 1-night prices (7 dates)
+            if pricing_data.get('oneNight'):
+                print(f"📅 [Scheduler] Fetching 1-night prices ({len(pricing_data['oneNight'])} dates)")
+                for i, item in enumerate(pricing_data['oneNight']):
+                    checkin = item.get('checkin')
+                    checkout = item.get('checkout')
+                    if checkin and checkout:
+                        url = self.build_airbnb_url(base_url, checkin, checkout)
+                        price = self.fetch_price_from_python_api(url)
+                        if price is not None:
+                            pricing_data['oneNight'][i]['price'] = price
+                            total_fetched += 1
+                            # Update MongoDB incrementally
+                            collection.update_one(
+                                {'_id': ObjectId(search_id)},
+                                {'$set': {'pricingData': pricing_data}}
+                            )
+                            print(f"  ✓ [{i+1}/{len(pricing_data['oneNight'])}] {checkin} → {checkout}: {price}")
+            
+            # 2-night prices (7 dates)
+            if pricing_data.get('twoNights'):
+                print(f"📅 [Scheduler] Fetching 2-night prices ({len(pricing_data['twoNights'])} dates)")
+                for i, item in enumerate(pricing_data['twoNights']):
+                    checkin = item.get('checkin')
+                    checkout = item.get('checkout')
+                    if checkin and checkout:
+                        url = self.build_airbnb_url(base_url, checkin, checkout)
+                        price = self.fetch_price_from_python_api(url)
+                        if price is not None:
+                            pricing_data['twoNights'][i]['price'] = price
+                            total_fetched += 1
+                            collection.update_one(
+                                {'_id': ObjectId(search_id)},
+                                {'$set': {'pricingData': pricing_data}}
+                            )
+                            print(f"  ✓ [{i+1}/{len(pricing_data['twoNights'])}] {checkin} → {checkout}: {price}")
+            
+            # 3-night prices (7 dates)
+            if pricing_data.get('threeNights'):
+                print(f"📅 [Scheduler] Fetching 3-night prices ({len(pricing_data['threeNights'])} dates)")
+                for i, item in enumerate(pricing_data['threeNights']):
+                    checkin = item.get('checkin')
+                    checkout = item.get('checkout')
+                    if checkin and checkout:
+                        url = self.build_airbnb_url(base_url, checkin, checkout)
+                        price = self.fetch_price_from_python_api(url)
+                        if price is not None:
+                            pricing_data['threeNights'][i]['price'] = price
+                            total_fetched += 1
+                            collection.update_one(
+                                {'_id': ObjectId(search_id)},
+                                {'$set': {'pricingData': pricing_data}}
+                            )
+                            print(f"  ✓ [{i+1}/{len(pricing_data['threeNights'])}] {checkin} → {checkout}: {price}")
+            
+            # 14-night price
+            if pricing_data.get('fourteenNights') and pricing_data['fourteenNights'].get('checkin'):
+                print(f"📅 [Scheduler] Fetching 14-night price")
+                checkin = pricing_data['fourteenNights']['checkin']
+                checkout = pricing_data['fourteenNights']['checkout']
+                url = self.build_airbnb_url(base_url, checkin, checkout)
+                price = self.fetch_price_from_python_api(url)
+                if price is not None:
+                    pricing_data['fourteenNights']['price'] = price
+                    total_fetched += 1
+                    collection.update_one(
+                        {'_id': ObjectId(search_id)},
+                        {'$set': {'pricingData': pricing_data}}
+                    )
+                    print(f"  ✓ 14-night {checkin} → {checkout}: {price}")
+            
+            # 30-night price
+            if pricing_data.get('thirtyNights') and pricing_data['thirtyNights'].get('checkin'):
+                print(f"📅 [Scheduler] Fetching 30-night price")
+                checkin = pricing_data['thirtyNights']['checkin']
+                checkout = pricing_data['thirtyNights']['checkout']
+                url = self.build_airbnb_url(base_url, checkin, checkout)
+                price = self.fetch_price_from_python_api(url)
+                if price is not None:
+                    pricing_data['thirtyNights']['price'] = price
+                    total_fetched += 1
+                    collection.update_one(
+                        {'_id': ObjectId(search_id)},
+                        {'$set': {'pricingData': pricing_data}}
+                    )
+                    print(f"  ✓ 30-night {checkin} → {checkout}: {price}")
+            
+            # Update status to completed
+            collection.update_one(
+                {'_id': ObjectId(search_id)},
+                {'$set': {'status': 'completed'}}
+            )
+            print(f"✅ [Scheduler] Completed search: {search_name} (fetched {total_fetched} prices)")
+            return True
+            
         except Exception as e:
             print(f"❌ [Scheduler] Error running search {search_name}: {e}")
+            import traceback
+            traceback.print_exc()
+            # Update status to error
+            if collection:
+                try:
+                    collection.update_one(
+                        {'_id': ObjectId(search_id)},
+                        {'$set': {'status': 'error'}}
+                    )
+                except:
+                    pass
             return False
     
     def wait_for_available_slot(self):

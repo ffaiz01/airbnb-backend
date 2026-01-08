@@ -9,6 +9,7 @@ ENV PYTHONUNBUFFERED=1
 ENV PYTHONDONTWRITEBYTECODE=1
 
 # Install system dependencies
+# gcc is needed for some Python packages like pymongo
 RUN apt-get update && apt-get install -y \
     gcc \
     && rm -rf /var/lib/apt/lists/*
@@ -25,10 +26,9 @@ COPY . .
 # Expose port
 EXPOSE 5000
 
-# Health check
+# Health check - checks if the API is responding
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD python -c "import requests; requests.get('http://localhost:5000/api/health')"
+    CMD python -c "import requests; requests.get('http://localhost:5000/api/health')" || exit 1
 
 # Run the application
 CMD ["python", "app.py"]
-
