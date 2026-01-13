@@ -32,7 +32,11 @@ def extract_lowest_price(results):
     for item in results_list:
         try:
             if 'price' in item and 'unit' in item['price'] and 'amount' in item['price']['unit']:
-                price_amount = item['price']['unit']['amount']
+                try:
+                    price_amount = item['price']['unit']['discount']
+                except:
+                    price_amount = item['price']['unit']['amount']
+
                 if price_amount is not None:
                     prices.append(float(price_amount))
         except (KeyError, TypeError, ValueError):

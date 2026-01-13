@@ -52,6 +52,9 @@ def search_airbnb():
             proxy_url=proxy_url,
             # hash=dynamic_hash,  # optional, fallbacks to predefined hash
         )
+
+        print(results)
+        input('g')
         
         # Extract lowest price using utility function
         price_info = extract_lowest_price(results)
