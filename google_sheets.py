@@ -41,22 +41,95 @@ class GoogleSheetsWriter:
     
     def _connect(self):
         """Connect to Google Sheets API"""
+        print("🔌 [Google Sheets] Starting connection process...")
         try:
+            # Check SPREADSHEET_ID
             if not SPREADSHEET_ID:
                 print("⚠️ [Google Sheets] SPREADSHEET_ID not set")
                 print("⚠️ [Google Sheets] Google Sheets integration disabled")
+                self.enabled = False
                 return
             
-            # Use embedded credentials
-            creds = Credentials.from_service_account_info(GOOGLE_CREDENTIALS, scopes=SCOPES)
+            print(f"📋 [Google Sheets] SPREADSHEET_ID: {SPREADSHEET_ID}")
+            print(f"📋 [Google Sheets] WORKSHEET_NAME: {WORKSHEET_NAME}")
+            
+            # Try to read from credentials.json first, fallback to embedded credentials
+            import json
+            import os
+            
+            creds_data = None
+            if os.path.exists('credentials.json'):
+                print("📁 [Google Sheets] Found credentials.json file, attempting to load...")
+                try:
+                    with open('credentials.json', 'r') as f:
+                        creds_data = json.load(f)
+                    print("✅ [Google Sheets] Successfully loaded credentials from credentials.json")
+                except Exception as e:
+                    print(f"⚠️ [Google Sheets] Error reading credentials.json: {e}")
+                    print("🔄 [Google Sheets] Falling back to embedded credentials...")
+            
+            if creds_data is None:
+                print("📝 [Google Sheets] Using embedded credentials...")
+                creds_data = GOOGLE_CREDENTIALS
+                if not creds_data or not creds_data.get('private_key'):
+                    print("❌ [Google Sheets] Embedded credentials are missing or invalid")
+                    self.enabled = False
+                    return
+            
+            # Check required fields in credentials
+            required_fields = ['type', 'project_id', 'private_key', 'client_email']
+            missing_fields = [field for field in required_fields if not creds_data.get(field)]
+            if missing_fields:
+                print(f"❌ [Google Sheets] Missing required credential fields: {missing_fields}")
+                self.enabled = False
+                return
+            
+            print(f"✅ [Google Sheets] Credentials loaded - Project ID: {creds_data.get('project_id')}")
+            print(f"✅ [Google Sheets] Client Email: {creds_data.get('client_email')}")
+            
+            # Create credentials object
+            print("🔐 [Google Sheets] Creating credentials object...")
+            creds = Credentials.from_service_account_info(creds_data, scopes=SCOPES)
+            print("✅ [Google Sheets] Credentials object created")
+            
+            # Authorize gspread client
+            print("🔑 [Google Sheets] Authorizing gspread client...")
             self.client = gspread.authorize(creds)
+            print("✅ [Google Sheets] gspread client authorized")
+            
+            # Open spreadsheet
+            print(f"📊 [Google Sheets] Opening spreadsheet: {SPREADSHEET_ID}...")
             self.spreadsheet = self.client.open_by_key(SPREADSHEET_ID)
+            print(f"✅ [Google Sheets] Spreadsheet opened: {self.spreadsheet.title}")
+            
+            # Get or create worksheet
+            print(f"📄 [Google Sheets] Getting/creating worksheet: {WORKSHEET_NAME}...")
             self.worksheet = self._get_or_create_worksheet()
+            print(f"✅ [Google Sheets] Worksheet ready: {WORKSHEET_NAME}")
+            
             self.enabled = True
-            print(f"✅ [Google Sheets] Connected to spreadsheet: {SPREADSHEET_ID}")
+            print(f"✅ [Google Sheets] Successfully connected to spreadsheet: {SPREADSHEET_ID}")
+        except FileNotFoundError as e:
+            print(f"❌ [Google Sheets] File not found: {e}")
+            print("⚠️ [Google Sheets] Google Sheets integration disabled")
+            self.client = None
+            self.enabled = False
+        except gspread.exceptions.SpreadsheetNotFound as e:
+            print(f"❌ [Google Sheets] Spreadsheet not found: {e}")
+            print(f"❌ [Google Sheets] Check if SPREADSHEET_ID is correct: {SPREADSHEET_ID}")
+            print("⚠️ [Google Sheets] Google Sheets integration disabled")
+            self.client = None
+            self.enabled = False
+        except gspread.exceptions.APIError as e:
+            print(f"❌ [Google Sheets] API Error: {e}")
+            print(f"❌ [Google Sheets] Error details: {e.response}")
+            print("⚠️ [Google Sheets] Google Sheets integration disabled")
+            self.client = None
+            self.enabled = False
         except Exception as e:
-            print(f"❌ [Google Sheets] Error connecting: {e}")
+            print(f"❌ [Google Sheets] Unexpected error connecting: {type(e).__name__}: {e}")
             import traceback
+            print("📋 [Google Sheets] Full traceback:")
             traceback.print_exc()
             print("⚠️ [Google Sheets] Google Sheets integration disabled")
             self.client = None
@@ -64,27 +137,46 @@ class GoogleSheetsWriter:
     
     def _get_or_create_worksheet(self):
         """Get existing worksheet or create new one"""
+        print(f"🔍 [Google Sheets] Looking for worksheet: {WORKSHEET_NAME}...")
         try:
             worksheet = self.spreadsheet.worksheet(WORKSHEET_NAME)
+            print(f"✅ [Google Sheets] Found existing worksheet: {WORKSHEET_NAME}")
+            
             # Check if headers exist (check first row)
+            print(f"📋 [Google Sheets] Checking headers in row 1...")
             existing_headers = worksheet.row_values(1)
+            print(f"📋 [Google Sheets] Existing headers: {existing_headers}")
+            
             expected_headers = ['Timestamp', 'Search Name', 'URL', 'Checkin Date', 'Checkout Date', 'Nights', 'Price', 'Price Per Night', 'Cleaning Fee', 'Total']
+            print(f"📋 [Google Sheets] Expected headers: {expected_headers}")
             
             if not existing_headers or existing_headers != expected_headers:
                 # Add headers if they don't exist or don't match
                 if not existing_headers:
+                    print(f"📝 [Google Sheets] No headers found, adding headers...")
                     worksheet.append_row(expected_headers)
                     print(f"✅ [Google Sheets] Added headers to worksheet: {WORKSHEET_NAME}")
                 else:
                     print(f"⚠️ [Google Sheets] Worksheet headers don't match expected format, but continuing...")
+                    print(f"   Existing: {existing_headers}")
+                    print(f"   Expected: {expected_headers}")
             else:
-                print(f"✅ [Google Sheets] Using existing worksheet with headers: {WORKSHEET_NAME}")
+                print(f"✅ [Google Sheets] Using existing worksheet with correct headers: {WORKSHEET_NAME}")
         except gspread.exceptions.WorksheetNotFound:
+            print(f"📄 [Google Sheets] Worksheet '{WORKSHEET_NAME}' not found, creating new one...")
             worksheet = self.spreadsheet.add_worksheet(title=WORKSHEET_NAME, rows=1000, cols=10)
+            print(f"✅ [Google Sheets] Created new worksheet: {WORKSHEET_NAME}")
             # Add headers
             headers = ['Timestamp', 'Search Name', 'URL', 'Checkin Date', 'Checkout Date', 'Nights', 'Price', 'Price Per Night', 'Cleaning Fee', 'Total']
+            print(f"📝 [Google Sheets] Adding headers to new worksheet...")
             worksheet.append_row(headers)
-            print(f"✅ [Google Sheets] Created new worksheet: {WORKSHEET_NAME}")
+            print(f"✅ [Google Sheets] Headers added to new worksheet")
+        except Exception as e:
+            print(f"❌ [Google Sheets] Error in _get_or_create_worksheet: {type(e).__name__}: {e}")
+            import traceback
+            traceback.print_exc()
+            raise
+        
         return worksheet
     
     def write_pricing_data(self, search_name: str, url: str, cleaning_fee: float, pricing_data: Dict, timestamp: Optional[datetime] = None):
@@ -98,8 +190,17 @@ class GoogleSheetsWriter:
             pricing_data: Dictionary with pricing data (oneNight, twoNights, etc.)
             timestamp: When the data was scraped (defaults to now)
         """
-        if not self.enabled or not self.worksheet:
-            print("⚠️ [Google Sheets] Not connected, skipping write")
+        print(f"📝 [Google Sheets] write_pricing_data called for: {search_name}")
+        print(f"📊 [Google Sheets] Enabled: {self.enabled}, Worksheet: {self.worksheet is not None}")
+        
+        if not self.enabled:
+            print("⚠️ [Google Sheets] Not enabled, skipping write")
+            print(f"   Reason: Google Sheets integration was disabled during initialization")
+            return
+        
+        if not self.worksheet:
+            print("⚠️ [Google Sheets] Worksheet not available, skipping write")
+            print(f"   Reason: Worksheet was not created or connection failed")
             return
         
         if timestamp is None:
