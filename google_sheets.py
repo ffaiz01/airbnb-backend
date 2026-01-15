@@ -88,30 +88,10 @@ class GoogleSheetsWriter:
         """Get existing worksheet or create new one"""
         try:
             worksheet = self.spreadsheet.worksheet(WORKSHEET_NAME)
-            # Check if headers exist (check first row)
-            existing_headers = worksheet.row_values(1)
-            expected_headers = ['Timestamp', 'Search Name', 'URL', 'Checkin Date', 'Checkout Date', 'Nights', 'Price', 'Price Per Night', 'Cleaning Fee', 'Total']
-            
-            if not existing_headers or existing_headers != expected_headers:
-                # Headers don't exist or don't match - need to insert correct headers at row 1
-                all_values = worksheet.get_all_values()
-                if len(all_values) == 0:
-                    # Sheet is completely empty, insert headers at row 1
-                    worksheet.insert_row(expected_headers, 1)
-                    print(f"✅ [Google Sheets] Added headers to empty worksheet: {WORKSHEET_NAME}")
-                else:
-                    # Sheet has data but headers are wrong/missing - insert correct headers at row 1
-                    # This will push existing data down
-                    worksheet.insert_row(expected_headers, 1)
-                    print(f"✅ [Google Sheets] Inserted correct headers at row 1 (pushed {len(all_values)} existing row(s) down): {WORKSHEET_NAME}")
-            else:
-                print(f"✅ [Google Sheets] Using existing worksheet with correct headers: {WORKSHEET_NAME}")
+            print(f"✅ [Google Sheets] Found existing worksheet: {WORKSHEET_NAME}")
         except gspread.exceptions.WorksheetNotFound:
             worksheet = self.spreadsheet.add_worksheet(title=WORKSHEET_NAME, rows=1000, cols=10)
-            # Add headers at row 1
-            headers = ['Timestamp', 'Search Name', 'URL', 'Checkin Date', 'Checkout Date', 'Nights', 'Price', 'Price Per Night', 'Cleaning Fee', 'Total']
-            worksheet.insert_row(headers, 1)
-            print(f"✅ [Google Sheets] Created new worksheet with headers: {WORKSHEET_NAME}")
+            print(f"✅ [Google Sheets] Created new worksheet: {WORKSHEET_NAME}")
         return worksheet
     
     def write_pricing_data(self, search_name: str, url: str, cleaning_fee: float, pricing_data: Dict, timestamp: Optional[datetime] = None):
@@ -250,17 +230,39 @@ class GoogleSheetsWriter:
             try:
                 # Check actual data (not row_count, which includes empty allocated rows)
                 existing_data = self.worksheet.get_all_values()
+                expected_headers = ['Timestamp', 'Search Name', 'URL', 'Checkin Date', 'Checkout Date', 'Nights', 'Price', 'Price Per Night', 'Cleaning Fee', 'Total']
                 
-                # If sheet already has data rows (beyond headers)
-                if len(existing_data) > 1:
+                # Check if sheet is empty or doesn't have correct headers
+                needs_headers = False
+                if len(existing_data) == 0:
+                    # Sheet is completely empty
+                    needs_headers = True
+                    print(f"📋 [Google Sheets] Sheet is empty, will add headers as first row")
+                else:
+                    # Check if first row has correct headers
+                    existing_headers = existing_data[0] if existing_data else []
+                    if existing_headers != expected_headers:
+                        needs_headers = True
+                        print(f"📋 [Google Sheets] Headers missing or incorrect, will add headers as first row in new data")
+                
+                # If sheet already has data rows (beyond potential headers)
+                if len(existing_data) > 0:
                     # Insert empty separator row right after the last data row
                     empty_row = ['-'] * 10  # Use dashes for visible separator
                     self.worksheet.insert_row(empty_row, len(existing_data) + 1)
                     print(f"✅ [Google Sheets] Added empty separator row after row {len(existing_data)}")
                 
-                # Append data rows (they will be added after headers or after empty separator)
-                self.worksheet.append_rows(rows_to_add)
-                print(f"✅ [Google Sheets] Wrote {len(rows_to_add)} rows to Google Sheets")
+                # Prepare rows to append
+                rows_to_append = rows_to_add.copy()
+                
+                # If headers are needed, add them as the first row
+                if needs_headers:
+                    rows_to_append.insert(0, expected_headers)
+                    print(f"📋 [Google Sheets] Added headers as first row in new data batch")
+                
+                # Append all rows (headers + data, or just data)
+                self.worksheet.append_rows(rows_to_append)
+                print(f"✅ [Google Sheets] Wrote {len(rows_to_append)} rows to Google Sheets ({len(rows_to_add)} data rows + {'1 header row' if needs_headers else '0 header rows'})")
             except Exception as e:
                 print(f"❌ [Google Sheets] Error writing data: {e}")
                 import traceback
