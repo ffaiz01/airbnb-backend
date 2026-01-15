@@ -14,6 +14,14 @@ from typing import List, Dict, Optional
 import pytz
 from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
 
+# Optional Google Sheets integration
+try:
+    from google_sheets import sheets_writer
+    GOOGLE_SHEETS_ENABLED = True
+except ImportError:
+    GOOGLE_SHEETS_ENABLED = False
+    print("⚠️ [Scheduler] Google Sheets module not available")
+
 # Configuration
 MONGODB_URI = os.getenv('MONGODB_URI', 'mongodb+srv://wasif833:00123333@cluster0.6b8txmd.mongodb.net/')
 NEXTJS_API_URL = os.getenv('NEXTJS_API_URL', 'http://localhost:3000')
@@ -379,6 +387,22 @@ class Scheduler:
                 }
             )
             print(f"✅ [Scheduler] Completed search: {search_name} (fetched {total_fetched} prices)")
+            
+            # Write to Google Sheets (if enabled)
+            if GOOGLE_SHEETS_ENABLED:
+                try:
+                    cleaning_fee = search.get('cleaningFee', 0)
+                    sheets_writer.write_pricing_data(
+                        search_name=search_name,
+                        url=base_url,
+                        cleaning_fee=cleaning_fee,
+                        pricing_data=pricing_data,
+                        timestamp=current_time
+                    )
+                except Exception as e:
+                    print(f"⚠️ [Scheduler] Error writing to Google Sheets: {e}")
+                    # Don't fail the whole operation if Google Sheets fails
+            
             return True
             
         except Exception as e:
