@@ -221,10 +221,23 @@ class GoogleSheetsWriter:
         # Write all rows at once
         if rows_to_add:
             try:
+                # Check actual data (not row_count, which includes empty allocated rows)
+                existing_data = self.worksheet.get_all_values()
+                
+                # If sheet already has data rows (beyond headers)
+                if len(existing_data) > 1:
+                    # Insert empty separator row right after the last data row
+                    empty_row = ['-'] * 10  # Use dashes for visible separator
+                    self.worksheet.insert_row(empty_row, len(existing_data) + 1)
+                    print(f"✅ [Google Sheets] Added empty separator row after row {len(existing_data)}")
+                
+                # Append data rows (they will be added after headers or after empty separator)
                 self.worksheet.append_rows(rows_to_add)
                 print(f"✅ [Google Sheets] Wrote {len(rows_to_add)} rows to Google Sheets")
             except Exception as e:
                 print(f"❌ [Google Sheets] Error writing data: {e}")
+                import traceback
+                traceback.print_exc()
         else:
             print("⚠️ [Google Sheets] No pricing data to write (all prices are 0)")
 
