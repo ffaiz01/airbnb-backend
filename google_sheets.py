@@ -57,16 +57,41 @@ class GoogleSheetsWriter:
             import json
             import os
             
+            # Try multiple possible locations for credentials.json (important for Docker)
+            script_dir = os.path.dirname(os.path.abspath(__file__))
+            current_dir = os.getcwd()
+            possible_paths = [
+                os.path.join(script_dir, 'credentials.json'),  # Same directory as script (best for Docker)
+                'credentials.json',  # Current working directory
+                os.path.join(current_dir, 'credentials.json'),  # Explicit current directory
+                '/app/credentials.json',  # Common Docker working directory
+            ]
+            
+            print(f"📂 [Google Sheets] Script directory: {script_dir}")
+            print(f"📂 [Google Sheets] Current working directory: {current_dir}")
+            
             creds_data = None
-            if os.path.exists('credentials.json'):
-                print("📁 [Google Sheets] Found credentials.json file, attempting to load...")
-                try:
-                    with open('credentials.json', 'r') as f:
-                        creds_data = json.load(f)
-                    print("✅ [Google Sheets] Successfully loaded credentials from credentials.json")
-                except Exception as e:
-                    print(f"⚠️ [Google Sheets] Error reading credentials.json: {e}")
-                    print("🔄 [Google Sheets] Falling back to embedded credentials...")
+            credentials_path = None
+            
+            for path in possible_paths:
+                print(f"🔍 [Google Sheets] Checking for credentials.json at: {path}")
+                if os.path.exists(path):
+                    credentials_path = path
+                    print(f"📁 [Google Sheets] Found credentials.json at: {path}")
+                    try:
+                        with open(path, 'r') as f:
+                            creds_data = json.load(f)
+                        print(f"✅ [Google Sheets] Successfully loaded credentials from {path}")
+                        break
+                    except Exception as e:
+                        print(f"⚠️ [Google Sheets] Error reading {path}: {e}")
+                        print("🔄 [Google Sheets] Trying next location...")
+                        creds_data = None
+            
+            if not credentials_path:
+                print("⚠️ [Google Sheets] credentials.json not found in any of the checked locations")
+                print(f"   Checked locations: {possible_paths}")
+                print("🔄 [Google Sheets] Falling back to embedded credentials...")
             
             if creds_data is None:
                 print("📝 [Google Sheets] Using embedded credentials...")
