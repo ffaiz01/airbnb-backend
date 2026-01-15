@@ -171,6 +171,61 @@ class Scheduler:
             print(f"⚠️ [Scheduler] Error fetching price: {e}")
             return None
     
+    def generate_date_ranges(self, start_date_str: str) -> Dict:
+        """Generate date ranges for pricing data starting from a given date"""
+        start_date = datetime.strptime(start_date_str, '%Y-%m-%d')
+        ranges = {
+            'oneNight': [],
+            'twoNights': [],
+            'threeNights': [],
+            'fourteenNights': {'checkin': '', 'checkout': '', 'price': 0, 'date': ''},
+            'thirtyNights': {'checkin': '', 'checkout': '', 'price': 0, 'date': ''}
+        }
+        
+        # Generate 7 days of 1, 2, and 3-night stays
+        for i in range(7):
+            current_checkin = start_date + timedelta(days=i)
+            ranges['oneNight'].append({
+                'checkin': current_checkin.strftime('%Y-%m-%d'),
+                'checkout': (current_checkin + timedelta(days=1)).strftime('%Y-%m-%d'),
+                'price': 0,
+                'date': current_checkin.strftime('%Y-%m-%d')
+            })
+            ranges['twoNights'].append({
+                'checkin': current_checkin.strftime('%Y-%m-%d'),
+                'checkout': (current_checkin + timedelta(days=2)).strftime('%Y-%m-%d'),
+                'price': 0,
+                'date': current_checkin.strftime('%Y-%m-%d')
+            })
+            ranges['threeNights'].append({
+                'checkin': current_checkin.strftime('%Y-%m-%d'),
+                'checkout': (current_checkin + timedelta(days=3)).strftime('%Y-%m-%d'),
+                'price': 0,
+                'date': current_checkin.strftime('%Y-%m-%d')
+            })
+        
+        # 14-night stay (single)
+        fourteen_checkin = start_date
+        fourteen_checkout = start_date + timedelta(days=14)
+        ranges['fourteenNights'] = {
+            'checkin': fourteen_checkin.strftime('%Y-%m-%d'),
+            'checkout': fourteen_checkout.strftime('%Y-%m-%d'),
+            'price': 0,
+            'date': fourteen_checkin.strftime('%Y-%m-%d')
+        }
+        
+        # 30-night stay (single)
+        thirty_checkin = start_date
+        thirty_checkout = start_date + timedelta(days=30)
+        ranges['thirtyNights'] = {
+            'checkin': thirty_checkin.strftime('%Y-%m-%d'),
+            'checkout': thirty_checkout.strftime('%Y-%m-%d'),
+            'price': 0,
+            'date': thirty_checkin.strftime('%Y-%m-%d')
+        }
+        
+        return ranges
+    
     def run_search(self, search_id: str, search_name: str) -> bool:
         """Run a single search by fetching prices directly"""
         collection = None
@@ -203,8 +258,7 @@ class Scheduler:
             )
             print(f"📊 [Scheduler] Updated status to 'running' for {search_name}")
             
-            # Get pricing data
-            pricing_data = search.get('pricingData', {})
+            # Get base URL
             base_url = search.get('url', '')
             
             if not base_url:
@@ -214,6 +268,11 @@ class Scheduler:
                     {'$set': {'status': 'error'}}
                 )
                 return False
+            
+            # Generate date ranges starting from today
+            today = current_time.strftime('%Y-%m-%d')
+            print(f"📅 [Scheduler] Regenerating date ranges starting from {today}")
+            pricing_data = self.generate_date_ranges(today)
             
             # Fetch prices for all date ranges
             total_fetched = 0
@@ -305,10 +364,16 @@ class Scheduler:
                     )
                     print(f"  ✓ 30-night {checkin} → {checkout}: {price}")
             
-            # Update status to completed
+            # Update status to completed and save checkinDate
             collection.update_one(
                 {'_id': ObjectId(search_id)},
-                {'$set': {'status': 'completed'}}
+                {
+                    '$set': {
+                        'status': 'completed',
+                        'pricingData': pricing_data,
+                        'checkinDate': today
+                    }
+                }
             )
             print(f"✅ [Scheduler] Completed search: {search_name} (fetched {total_fetched} prices)")
             return True
