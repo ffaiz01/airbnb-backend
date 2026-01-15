@@ -52,5 +52,5 @@ Thumbs.db
 *.tmp
 *.bak
 
-# Test scripts
-test_google_sheets.py
+# Google Service Account credentials
+credentials.json
