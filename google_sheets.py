@@ -3,7 +3,6 @@ Google Sheets integration for writing pricing data
 """
 import gspread
 from google.oauth2.service_account import Credentials
-import os
 from datetime import datetime
 from typing import Dict, List, Optional
 
@@ -13,10 +12,24 @@ SCOPES = [
     'https://www.googleapis.com/auth/drive'
 ]
 
-# Environment variables
-CREDENTIALS_FILE = os.getenv('GOOGLE_CREDENTIALS_FILE', 'credentials.json')
-SPREADSHEET_ID = os.getenv('GOOGLE_SPREADSHEET_ID', '1yBOYJHltGzbnuvaLyqQChTQDHuNTtBU11uj9bA8oyXE')
-WORKSHEET_NAME = os.getenv('GOOGLE_WORKSHEET_NAME', 'Sheet1')
+# Embedded Google Service Account Credentials
+GOOGLE_CREDENTIALS = {
+    "type": "service_account",
+    "project_id": "mystic-fountain-475115-n3",
+    "private_key_id": "2485cebf193356a8363bf58192cc4b395442a0e6",
+    "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQCeRGPdmVvnmn4h\nPWHidiB1bp3w1n1nqX1rw65fS4q/2mUYF95zIVwpsdp+jL3mxoHQZGRLkhxu6E1g\nu/rbOu2MaBO+lYEZgZj3NpEuUUFEQ76M9616p+1VgvWZhRp7XU7chpaykssMxCw8\nj0RFiuA51SgsFoF8zc+lJQdHsWHyIgRqDy/XrBFb0ACI4B7sF1eg55X8SUWhnFJs\nhZp7RKLEz2FwxKT6jw3qzUDDPA0CqgWisqS/ThOgjhtKgSa2ZySI3qNfHaouV7R9\nPlxnWUvpcKfH87DFo22enfMMGc9eu9sbbI5XWNByZk63nYIPrLvPl/dCaBjQeZ3O\nxHW2Rc5XAgMBAAECggEAANzZv67zysRIDjJyV2G7sY+026IaB5m+RGSkYEYiBgOy\nr5vvWIqbXR6Vel94BnhsENg0qLFEUOGCOf9ojeJt70r+4ffzPtlY4VgX61Kn1D6M\naDzk6dWZjvDi7IqojPFc+EW0PtJ5bqLpd0ndkv4OoCITuoK8MG3KxTOfPAHtWDjT\nSatOYKIyDtK391zKXLD0JkViHV/SyA3hwwybjY7ISF3zxVhxSjmhz0JFgsaXwfLo\n2DCShyMCV1kKFBlcXNpw+pNwgAL1CAfK7tZuLSVInFas6ZUiOJWm0DZr0EuBNXtb\nRHrBxdMGH7vsF/Z4LhQ1T4NqQ8adGPiG01Dir4g+iQKBgQDNpjnC9g3eXk3ioDAI\n/TzGeDX0y1p7lsWWCFWrpXU99voH9Z1KBkFvzHKjcDR8Q8HEUnV/ZfZsgf5koo6I\n5eCC8xHkfPxlaxfo9uArzN3uOVhZe+6Vr9cST0/phfhXQbmMU3V7ZUT7BDxvBu9G\nlMEpgUVx4PhAWteFcziR9ZvCtQKBgQDFBFMtxzLNN7bVY3IFnI3VtWadUW9/5bCM\nw8e4AEWJ6zcBYIc4qyNQAF3bV0FFaHpBXmYcaPna9zZLfHepACGqrZHi+yMCIF3V\nsiiEn+1l4i3rY0xGlDl16/23Jesb7r2Q3orEzCiGsRzjL+BrZTpUqnTTGhLGwfKr\nq+NQwhA4WwKBgF5TXDMcgQf54WeNafr1jKbMBJOfooUFhuNmN0VfwwMFAXIdKmQF\nsoYBFKP6l1hYC8xsthAVSI5Eodau6QnJxszJiO9wlKRAFtt4QSJV+YWHMAr7WVe3\nK8LuNg06scn0D5NZxI0wyg8Ixl92otGQ8XiEHsI5GiUKhchkLRJlwWfxAoGBAL3h\nVDVrpeepiboRtSP5Za2RvotioD645bZVPph1EpBBNWtLWCfisQ76u3qZltvJPQLh\nczJwblZ+KkMIe99StB/mVxNXDb+P6D/8DBb+d/PY0H7r3eisFNE1F/s7PWRXbTZB\ndacESQ6/hmLjkryO/G/7NMr8dxo+dJ7F9DiyQKW/AoGBAIYc8e8Xx3XbncA1r+Sk\nKqbkbXDHGiKrRTEFDqTHbq2YKK3v76/Gu1kYmqICI0dbeXnO/4k2LY3soOjYYKf5\n3CDv9m59G8UrXo5C58yontjd0pn6AuG6a+vBolBY4cA1WdCJV4apc8w8MU2fjHCE\npivvaHcxYUk3OfNyvSrjVjhy\n-----END PRIVATE KEY-----\n",
+    "client_email": "wasifali@mystic-fountain-475115-n3.iam.gserviceaccount.com",
+    "client_id": "116011004154147736219",
+    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+    "token_uri": "https://oauth2.googleapis.com/token",
+    "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+    "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/wasifali%40mystic-fountain-475115-n3.iam.gserviceaccount.com",
+    "universe_domain": "googleapis.com"
+}
+
+# Google Sheets configuration
+SPREADSHEET_ID = '1yBOYJHltGzbnuvaLyqQChTQDHuNTtBU11uj9bA8oyXE'
+WORKSHEET_NAME = 'Sheet1'
 
 class GoogleSheetsWriter:
     def __init__(self):
@@ -29,17 +42,13 @@ class GoogleSheetsWriter:
     def _connect(self):
         """Connect to Google Sheets API"""
         try:
-            if not os.path.exists(CREDENTIALS_FILE):
-                print(f"⚠️ [Google Sheets] Credentials file not found: {CREDENTIALS_FILE}")
-                print("⚠️ [Google Sheets] Google Sheets integration disabled")
-                return
-            
             if not SPREADSHEET_ID:
-                print("⚠️ [Google Sheets] SPREADSHEET_ID not set in environment variables")
+                print("⚠️ [Google Sheets] SPREADSHEET_ID not set")
                 print("⚠️ [Google Sheets] Google Sheets integration disabled")
                 return
             
-            creds = Credentials.from_service_account_file(CREDENTIALS_FILE, scopes=SCOPES)
+            # Use embedded credentials
+            creds = Credentials.from_service_account_info(GOOGLE_CREDENTIALS, scopes=SCOPES)
             self.client = gspread.authorize(creds)
             self.spreadsheet = self.client.open_by_key(SPREADSHEET_ID)
             self.worksheet = self._get_or_create_worksheet()
@@ -47,6 +56,8 @@ class GoogleSheetsWriter:
             print(f"✅ [Google Sheets] Connected to spreadsheet: {SPREADSHEET_ID}")
         except Exception as e:
             print(f"❌ [Google Sheets] Error connecting: {e}")
+            import traceback
+            traceback.print_exc()
             print("⚠️ [Google Sheets] Google Sheets integration disabled")
             self.client = None
             self.enabled = False
