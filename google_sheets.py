@@ -93,22 +93,19 @@ class GoogleSheetsWriter:
             expected_headers = ['Timestamp', 'Search Name', 'URL', 'Checkin Date', 'Checkout Date', 'Nights', 'Price', 'Price Per Night', 'Cleaning Fee', 'Total']
             
             if not existing_headers or existing_headers != expected_headers:
-                # Add headers if they don't exist or don't match
-                if not existing_headers:
-                    # Check if sheet is empty (no data rows)
-                    all_values = worksheet.get_all_values()
-                    if len(all_values) == 0:
-                        # Sheet is completely empty, insert headers at row 1
-                        worksheet.insert_row(expected_headers, 1)
-                        print(f"✅ [Google Sheets] Added headers to empty worksheet: {WORKSHEET_NAME}")
-                    else:
-                        # Sheet has data but no headers in row 1, insert at row 1
-                        worksheet.insert_row(expected_headers, 1)
-                        print(f"✅ [Google Sheets] Inserted headers at row 1: {WORKSHEET_NAME}")
+                # Headers don't exist or don't match - need to insert correct headers at row 1
+                all_values = worksheet.get_all_values()
+                if len(all_values) == 0:
+                    # Sheet is completely empty, insert headers at row 1
+                    worksheet.insert_row(expected_headers, 1)
+                    print(f"✅ [Google Sheets] Added headers to empty worksheet: {WORKSHEET_NAME}")
                 else:
-                    print(f"⚠️ [Google Sheets] Worksheet headers don't match expected format, but continuing...")
+                    # Sheet has data but headers are wrong/missing - insert correct headers at row 1
+                    # This will push existing data down
+                    worksheet.insert_row(expected_headers, 1)
+                    print(f"✅ [Google Sheets] Inserted correct headers at row 1 (pushed {len(all_values)} existing row(s) down): {WORKSHEET_NAME}")
             else:
-                print(f"✅ [Google Sheets] Using existing worksheet with headers: {WORKSHEET_NAME}")
+                print(f"✅ [Google Sheets] Using existing worksheet with correct headers: {WORKSHEET_NAME}")
         except gspread.exceptions.WorksheetNotFound:
             worksheet = self.spreadsheet.add_worksheet(title=WORKSHEET_NAME, rows=1000, cols=10)
             # Add headers at row 1
@@ -138,14 +135,14 @@ class GoogleSheetsWriter:
         timestamp_str = timestamp.strftime('%Y-%m-%d %H:%M:%S')
         rows_to_add = []
         
-        # Process 1-night prices
+        # Process 1-night prices (include even if price is 0)
         if pricing_data.get('oneNight'):
             for item in pricing_data['oneNight']:
                 checkin = item.get('checkin', '')
                 checkout = item.get('checkout', '')
                 price = item.get('price', 0)
-                if checkin and checkout and price > 0:
-                    price_per_night = price / 1
+                if checkin and checkout:
+                    price_per_night = price / 1 if price > 0 else 0
                     total = price + cleaning_fee
                     rows_to_add.append([
                         timestamp_str,
@@ -160,14 +157,14 @@ class GoogleSheetsWriter:
                         total
                     ])
         
-        # Process 2-night prices
+        # Process 2-night prices (include even if price is 0)
         if pricing_data.get('twoNights'):
             for item in pricing_data['twoNights']:
                 checkin = item.get('checkin', '')
                 checkout = item.get('checkout', '')
                 price = item.get('price', 0)
-                if checkin and checkout and price > 0:
-                    price_per_night = price / 2
+                if checkin and checkout:
+                    price_per_night = price / 2 if price > 0 else 0
                     total = price + cleaning_fee
                     rows_to_add.append([
                         timestamp_str,
@@ -182,14 +179,14 @@ class GoogleSheetsWriter:
                         total
                     ])
         
-        # Process 3-night prices
+        # Process 3-night prices (include even if price is 0)
         if pricing_data.get('threeNights'):
             for item in pricing_data['threeNights']:
                 checkin = item.get('checkin', '')
                 checkout = item.get('checkout', '')
                 price = item.get('price', 0)
-                if checkin and checkout and price > 0:
-                    price_per_night = price / 3
+                if checkin and checkout:
+                    price_per_night = price / 3 if price > 0 else 0
                     total = price + cleaning_fee
                     rows_to_add.append([
                         timestamp_str,
@@ -204,14 +201,14 @@ class GoogleSheetsWriter:
                         total
                     ])
         
-        # Process 14-night price
+        # Process 14-night price (include even if price is 0)
         if pricing_data.get('fourteenNights'):
             item = pricing_data['fourteenNights']
             checkin = item.get('checkin', '')
             checkout = item.get('checkout', '')
             price = item.get('price', 0)
-            if checkin and checkout and price > 0:
-                price_per_night = price / 14
+            if checkin and checkout:
+                price_per_night = price / 14 if price > 0 else 0
                 total = price + cleaning_fee
                 rows_to_add.append([
                     timestamp_str,
@@ -226,14 +223,14 @@ class GoogleSheetsWriter:
                     total
                 ])
         
-        # Process 30-night price
+        # Process 30-night price (include even if price is 0)
         if pricing_data.get('thirtyNights'):
             item = pricing_data['thirtyNights']
             checkin = item.get('checkin', '')
             checkout = item.get('checkout', '')
             price = item.get('price', 0)
-            if checkin and checkout and price > 0:
-                price_per_night = price / 30
+            if checkin and checkout:
+                price_per_night = price / 30 if price > 0 else 0
                 total = price + cleaning_fee
                 rows_to_add.append([
                     timestamp_str,
