@@ -244,19 +244,10 @@ class Scheduler:
                 print(f"❌ [Scheduler] Search not found: {search_id}")
                 return False
             
-            # Update status to running
+            # Get current time and today's date
             current_time = datetime.now(TZ if TZ else None)
             last_run_str = current_time.strftime('%H:%M')
-            collection.update_one(
-                {'_id': ObjectId(search_id)},
-                {
-                    '$set': {
-                        'status': 'running',
-                        'lastRun': last_run_str
-                    }
-                }
-            )
-            print(f"📊 [Scheduler] Updated status to 'running' for {search_name}")
+            today = current_time.strftime('%Y-%m-%d')
             
             # Get base URL
             base_url = search.get('url', '')
@@ -269,12 +260,25 @@ class Scheduler:
                 )
                 return False
             
-            # Generate date ranges starting from today
-            today = current_time.strftime('%Y-%m-%d')
+            # STEP 1: Generate date ranges starting from today (with prices = 0)
             print(f"📅 [Scheduler] Regenerating date ranges starting from {today}")
             pricing_data = self.generate_date_ranges(today)
             
-            # Fetch prices for all date ranges
+            # STEP 2: Update database immediately with new dates (prices = 0) and set status to running
+            collection.update_one(
+                {'_id': ObjectId(search_id)},
+                {
+                    '$set': {
+                        'status': 'running',
+                        'lastRun': last_run_str,
+                        'pricingData': pricing_data,
+                        'checkinDate': today
+                    }
+                }
+            )
+            print(f"📊 [Scheduler] Updated database with new dates (prices = 0) and set status to 'running' for {search_name}")
+            
+            # STEP 3: Now start fetching prices for all date ranges
             total_fetched = 0
             
             # 1-night prices (7 dates)
@@ -364,14 +368,13 @@ class Scheduler:
                     )
                     print(f"  ✓ 30-night {checkin} → {checkout}: {price}")
             
-            # Update status to completed and save checkinDate
+            # Update status to completed (checkinDate already set in step 2)
             collection.update_one(
                 {'_id': ObjectId(search_id)},
                 {
                     '$set': {
                         'status': 'completed',
-                        'pricingData': pricing_data,
-                        'checkinDate': today
+                        'pricingData': pricing_data
                     }
                 }
             )
