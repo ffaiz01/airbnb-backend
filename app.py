@@ -183,6 +183,55 @@ def start_scheduler_endpoint():
     else:
         return jsonify({"message": "Scheduler already running"})
 
+@app.route('/api/searches/<search_id>/run', methods=['POST'])
+def run_search_endpoint(search_id):
+    """Trigger a search to run immediately using the scheduler"""
+    try:
+        from scheduler import scheduler
+        
+        # Get search name from MongoDB for logging
+        from pymongo import MongoClient
+        from bson import ObjectId
+        import os
+        
+        mongodb_uri = os.getenv('MONGODB_URI', 'mongodb+srv://wasif833:00123333@cluster0.6b8txmd.mongodb.net/')
+        client = MongoClient(mongodb_uri, tls=True, tlsAllowInvalidCertificates=False)
+        
+        # Extract database name
+        uri_parts = mongodb_uri.rstrip('/').split('/')
+        if len(uri_parts) > 3 and uri_parts[-1] and uri_parts[-1] != '':
+            db_name = uri_parts[-1].split('?')[0]
+        else:
+            db_name = 'airbnb-price-spy'
+        
+        if db_name == '' or db_name == mongodb_uri or db_name is None:
+            db_name = 'airbnb-price-spy'
+        
+        db = client[db_name]
+        collection = db.searches
+        
+        # Get search to verify it exists and get name
+        search = collection.find_one({'_id': ObjectId(search_id)})
+        if not search:
+            return jsonify({"error": "Search not found"}), 404
+        
+        search_name = search.get('name', 'Unknown')
+        
+        # Submit task to scheduler
+        scheduler.submit_task(search_id, search_name)
+        
+        return jsonify({
+            "success": True,
+            "message": f"Search '{search_name}' has been queued to run",
+            "search_id": search_id
+        }), 200
+        
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
 if __name__ == '__main__':
     # Start scheduler in background
     scheduler_thread = start_scheduler()
