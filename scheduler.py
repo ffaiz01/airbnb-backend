@@ -30,10 +30,11 @@ MAX_WORKERS = 3  # Maximum concurrent threads
 CHECK_INTERVAL = 60  # Check for scheduled tasks every 60 seconds
 
 # Timezone configuration - use system local timezone or set explicitly
+# For UK (GMT/BST): 'Europe/London'
 # For PKT (Pakistan Time): 'Asia/Karachi'
 # For UTC: 'UTC'
 # For system local: None (uses system default)
-SCHEDULER_TIMEZONE = os.getenv('SCHEDULER_TIMEZONE', 'Asia/Karachi')  # Default to PKT
+SCHEDULER_TIMEZONE = os.getenv('SCHEDULER_TIMEZONE', 'Europe/London')  # Default to UK timezone
 if SCHEDULER_TIMEZONE:
     try:
         TZ = pytz.timezone(SCHEDULER_TIMEZONE)
