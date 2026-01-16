@@ -245,13 +245,6 @@ class GoogleSheetsWriter:
                         needs_headers = True
                         print(f"📋 [Google Sheets] Headers missing or incorrect, will add headers as first row in new data")
                 
-                # If sheet already has data rows (beyond potential headers)
-                if len(existing_data) > 0:
-                    # Insert empty separator row right after the last data row
-                    empty_row = ['-'] * 10  # Use dashes for visible separator
-                    self.worksheet.insert_row(empty_row, len(existing_data) + 1)
-                    print(f"✅ [Google Sheets] Added empty separator row after row {len(existing_data)}")
-                
                 # Prepare rows to append
                 rows_to_append = rows_to_add.copy()
                 
@@ -260,7 +253,14 @@ class GoogleSheetsWriter:
                     rows_to_append.insert(0, expected_headers)
                     print(f"📋 [Google Sheets] Added headers as first row in new data batch")
                 
-                # Append all rows (headers + data, or just data)
+                # If sheet already has data rows (beyond potential headers), add separator at start of new batch
+                if len(existing_data) > 0:
+                    # Add empty separator row at the start of new data batch (before headers if headers were added)
+                    empty_row = ['-'] * 10  # Use dashes for visible separator
+                    rows_to_append.insert(0, empty_row)
+                    print(f"✅ [Google Sheets] Added empty separator row at start of new data batch")
+                
+                # Append all rows (separator + headers + data, or separator + data, or headers + data, or just data)
                 self.worksheet.append_rows(rows_to_append)
                 print(f"✅ [Google Sheets] Wrote {len(rows_to_append)} rows to Google Sheets ({len(rows_to_add)} data rows + {'1 header row' if needs_headers else '0 header rows'})")
             except Exception as e:
